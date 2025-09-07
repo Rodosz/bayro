@@ -1,0 +1,192 @@
+<!DOCTYPE html>
+<html lang="hu">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>BAYRO KFT Menetlevél</title>
+<style>
+  :root {
+    --primary-color: #2e5939;
+    --bg-color: #f0f3f1;
+    --card-bg: #ffffff;
+    --text-color: #fff;
+    --text-dark: #111;
+  }
+  body {
+    margin: 0;
+    font-family: Arial, sans-serif;
+    background: var(--bg-color);
+    color: var(--text-dark);
+  }
+  header {
+    background: var(--primary-color);
+    color: white;
+    padding: 16px;
+    text-align: center;
+  }
+  .wrap {
+    max-width: 900px;
+    margin: 20px auto;
+    padding: 10px;
+  }
+  .card {
+    background: var(--card-bg);
+    padding: 16px;
+    border-radius: 12px;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+    margin-bottom: 20px;
+  }
+  label {
+    font-weight: bold;
+    display: block;
+    margin-top: 10px;
+  }
+  input, select, textarea {
+    width: 100%;
+    padding: 8px;
+    margin-top: 4px;
+    border-radius: 6px;
+    border: 1px solid #ccc;
+    box-sizing: border-box;
+  }
+  button {
+    background: var(--primary-color);
+    color: white;
+    border: none;
+    padding: 10px 16px;
+    border-radius: 8px;
+    margin-top: 12px;
+    cursor: pointer;
+    font-weight: bold;
+  }
+  .list-item {
+    padding: 8px;
+    border-bottom: 1px solid #ccc;
+  }
+  .archiv {
+    margin-top: 16px;
+  }
+  .archiv button {
+    background: #444;
+    margin-top: 4px;
+  }
+</style>
+</head>
+<body>
+<header>
+  <h1>BAYRO KFT Menetlevél</h1>
+</header>
+<div class="wrap">
+  <div class="card">
+    <label>Rendszám</label>
+    <input id="rendszam" value="AEDM-961">
+    <label>Sofőr neve</label>
+    <input id="driver" value="Biró Zoltán László">
+    <label>Dátum</label>
+    <input type="date" id="date">
+    <label>Indulás helye</label>
+    <input id="start" value="Aranyvölgy utca 39">
+    <label>Indulás ideje</label>
+    <input type="time" id="startTime" value="06:00">
+    <label>Érkezés helye</label>
+    <input id="end">
+    <label>Érkezés ideje</label>
+    <input type="time" id="endTime" value="08:00">
+    <label>Megjegyzés</label>
+    <textarea id="note" rows="2"></textarea>
+    <button id="addEntry">Hozzáadás a naplóhoz</button>
+    <button id="exportPDF">Export PDF</button>
+  </div>
+  <div class="card">
+    <h3>Aktuális napló</h3>
+    <div id="entryList"></div>
+  </div>
+  <div class="card archiv">
+    <h3>Archív exportok</h3>
+    <div id="archiveList"></div>
+  </div>
+</div>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script>
+const { jsPDF } = window.jspdf;
+
+const entryListEl = document.getElementById('entryList');
+const archiveListEl = document.getElementById('archiveList');
+const addEntryBtn = document.getElementById('addEntry');
+const exportPDFBtn = document.getElementById('exportPDF');
+
+// dátum input alapértelmezett aktuális nap
+document.getElementById('date').value = new Date().toISOString().slice(0,10);
+
+let entries = JSON.parse(localStorage.getItem('menetlevel_entries')||'[]');
+let archives = JSON.parse(localStorage.getItem('menetlevel_archives')||'[]');
+
+function renderEntries(){
+  entryListEl.innerHTML = entries.map((e,i)=>
+    `<div class='list-item'>${e.date} | ${e.start} (${e.startTime}) → ${e.end} (${e.endTime}) | ${e.note||''}</div>`
+  ).join('') || '<div>Nincs még bejegyzés.</div>';
+}
+
+function renderArchives(){
+  archiveListEl.innerHTML = archives.map((a,i)=>
+    `<button onclick="downloadArchive(${i})">${a.name}</button>`
+  ).join('') || '<div>Nincs még archív export.</div>';
+}
+
+addEntryBtn.onclick = () => {
+  const entry = {
+    rendszam: document.getElementById('rendszam').value,
+    driver: document.getElementById('driver').value,
+    date: document.getElementById('date').value,
+    start: document.getElementById('start').value,
+    startTime: document.getElementById('startTime').value,
+    end: document.getElementById('end').value,
+    endTime: document.getElementById('endTime').value,
+    note: document.getElementById('note').value
+  };
+  entries.push(entry);
+  localStorage.setItem('menetlevel_entries', JSON.stringify(entries));
+  renderEntries();
+};
+
+exportPDFBtn.onclick = () => {
+  if(entries.length===0){alert('Nincs mit exportálni!'); return;}
+  const doc = new jsPDF();
+  let y = 20;
+  doc.setFontSize(16);
+  doc.text('BAYRO KFT – Menetlevél', 105, y, null, null, 'center'); y+=10;
+  doc.setFontSize(12);
+  doc.text(`Rendszám: ${entries[0].rendszam}  |  Sofőr: ${entries[0].driver}`, 105, y, null, null, 'center'); y+=10;
+  doc.text(`Export dátum: ${new Date().toLocaleDateString()}`, 105, y, null, null, 'center'); y+=10;
+  // táblázat fejléce
+  doc.setFontSize(10);
+  doc.text('Dátum',10,y); doc.text('Indulás',40,y); doc.text('Indulás idő',70,y); doc.text('Érkezés',100,y); doc.text('Érkezés idő',140,y); doc.text('Megjegyzés',180,y); y+=6;
+  entries.forEach(e=>{
+    doc.text(e.date,10,y); doc.text(e.start,40,y); doc.text(e.startTime,70,y); doc.text(e.end,100,y); doc.text(e.endTime,140,y); doc.text(e.note||'',180,y); y+=6;
+    if(y>280){doc.addPage(); y=20;}
+  });
+  const fileName = `Menetlevel_${new Date().toISOString().slice(0,10)}.pdf`;
+  doc.save(fileName);
+  // archívba mentés
+  archives.push({name:fileName, content:doc.output('datauristring')});
+  localStorage.setItem('menetlevel_archives', JSON.stringify(archives));
+  // töröljük az aktuális napló
+  entries=[];
+  localStorage.setItem('menetlevel_entries','[]');
+  renderEntries();
+  renderArchives();
+};
+
+function downloadArchive(idx){
+  const a = document.createElement('a');
+  a.href = archives[idx].content;
+  a.download = archives[idx].name;
+  a.click();
+}
+
+// init
+renderEntries();
+renderArchives();
+</script>
+</body>
+</html>
